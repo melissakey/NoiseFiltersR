@@ -1,0 +1,278 @@
+% \VignetteIndexEntry{The NoiseFiltersR Package: Label Noise Preprocessing in R}
+% \VignetteDepends{NoiseFiltersR}
+% \VignetteKeywords{NoiseFiltersR}
+% \VignetteKeywords{noise}
+% \VignettePackage{NoiseFiltersR}
+%\VignetteCompiler{knitr}
+%\VignetteEngine{knitr::knitr}
+
+\documentclass[a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,array}
+\usepackage{booktabs}
+
+% Size of the layout
+%\usepackage[a4paper, top=1.5cm, bottom=1.5cm, left=2cm, right=2cm]{geometry}
+\usepackage[a4paper, total={160mm, 247mm}]{geometry}
+
+%% load any required packages here
+% Paco Ch.
+\usepackage{color}
+\usepackage{stmaryrd}
+\usepackage{url}
+\usepackage[numbers,sectionbib]{natbib}
+% Mine
+\usepackage{authblk}
+%\usepackage{lmodern}%junto con el siguiente hace que la letra en el pdf se vea mejor
+\usepackage{epstopdf}
+
+\begin{document}
+
+\providecommand{\pkg}[1]{\textbf{#1}}
+\providecommand{\CRANpkg}[1]{\textbf{#1}}
+\providecommand{\code}[1]{\texttt{#1}}
+\providecommand{\file}[1]{\texttt{'#1'}}
+
+\title{The \pkg{NoiseFiltersR} Package:\\ Label Noise Preprocessing in R}
+
+%\author{Pablo Morales\inst{1}, Juli\'{a}n Luengo\inst{1}, Lu\'{i}s P.F. Garc\'{i}a\inst{2}, Ana C. Lorena\inst{3},\\ Andr\'{e} C.P.L.F. de Carvalho\inst{2}, Francisco Herrera\inst{1}}
+
+%\institute{Department of Computer Science and Artificial Intelligence, University of Granada,\\
+%CITIC-UGR, Granada, Spain, 18071
+%\and
+%Department of Autom\'{a}tica y Computaci\'{o}n, Universidad P\'{u}blica de Navarra,
+%\\ Pamplona, Spain, 31006
+%\and
+%Department of Civil Engineering, LSI, University of Burgos,
+%\\ Burgos, Spain, 09006
+%}
+
+\author[1]{Pablo Morales}
+\author[1]{Juli\'{a}n Luengo}
+\author[2]{Lu\'{i}s P.F. Garcia}
+\author[3]{Ana C. Lorena}
+\author[2]{Andr\'{e} C.P.L.F. de Carvalho}
+\author[1]{Francisco Herrera}
+
+\affil[1]{Department of Computer Science and Artificial Intelligence, University of Granada, Granada, 18071, Spain}
+\affil[2]{Instituto de Ciências Matem\'{a}ticas e de Computa\c{c}ão, Universidade de São Paulo, Trabalhador São-carlense Av. 400, São Carlos, São Paulo 13560-970, Brazil}
+\affil[3]{Instituto de Ciência e Tecnologia, Universidade Federal de São Paulo,
+Talim St. 330, São José dos Campos, São Paulo 12231-280, Brazil}
+
+\date{}
+
+\maketitle
+
+\definecolor{highlight}{rgb}{0,0,0}
+
+
+\abstract{
+In Data Mining, the value of extracted knowledge is directly related to the quality
+of used data, which turns data preprocessing into one of the most important steps
+of the whole learning process. In classification problems, label noise refers to the incorrect
+labelling of training instances, and is known to be a very disruptive feature of data.
+In this work we present the \pkg{NoiseFiltersR} package. It contains the first
+extensive R implementation of classical and state-of-the-art label noise filters, which
+are the most common technique for preprocessing label noise. All these algorithms are
+appropriately documented and referenced, they can be called in a R-user-friendly manner, and their results are unified by means of the \code{"filter"}
+class, which also benefits from adapted \code{print} and \code{summary} methods.
+}
+
+
+\section{Introduction}
+
+In last years, Data Mining has been faced with increasingly challenging problems in terms
+of the nature of available data. Not only its size, but also its imperfections and varied shapes, are providing the researchers with plenty of different scenarios to be addressed. Consequently, Data Preprocessing \cite{garcia2015} has become an important part
+of the \emph{KDD (Knowledge Discovery from Databases)} process, and related-software
+development is also essential to provide practitioners with the adequate tools.
+
+Data Preprocessing intends to appropriately process the collected data so that subsequent learning algorithms can extract maximum knowledge out of it.
+It is known to be one of the most time-consuming steps in the whole KDD process.
+There exist several aspects involved in data preprocessing, like \emph{feature selection} or dealing with \emph{missing values} and \emph{noisy data}. Feature selection aims at extracting the most relevant attributes for the learning step, thus reducing the complexity of models and the computing time. The treatment of missing values is also essential to keep as much information as possible in data
+%(this is specially important when missing values introduction scheme is not random).
+Finally, noisy data refers to values that are either incorrect or clearly far from the general underlying distribution.
+
+All these tasks have associated software available. For instance, the KEEL tool \cite{KEEL} contains a broad collection of data preprocessing algorithms, which covers all the aforementioned topics
+%\footnote{Next link to the official website shows all the algorithms available in KEEL: \url{http://www.keel.es/}.}
+. There are other popular options for these tasks, like SPSS or SAS for missing values, and WEKA \cite{Weka} or RapidMiner for feature selection. Apart from these, there exist many other general-purpose Data Mining software suites like R, KNIME or Python.
+
+Regarding the R statistical software, there are plenty of packages available in the \emph{Comprehensive R Archive Network (CRAN)} repository to address preprocessing tasks. For example, \CRANpkg{MICE} \cite{MICE} and \CRANpkg{Amelia} \cite{Amelia} are very popular packages for handling missing values, whereas \CRANpkg{caret} \cite{caret} or \CRANpkg{FSelector} \cite{FSelector} provide a wide range of techniques for feature selection. There are also general-purpose packages for decting outliers and anomalies, like \CRANpkg{mvoutlier} \cite{mvoutlier}.
+
+However, to the best of our knowledge, CRAN lacks an extensive collection of classification-oriented label noise preprocessing algorithms, some of which are among the most influential preprocessing techniques \cite{garcia2016}. This is the gap we intend to fill with the release of the \pkg{NoiseFiltersR} package, whose taxonomy is inspired on the recent survey on label noise by B. Fr\'{e}nay and M. Verleysen \cite{frenay}. Yet, it should be noted that there are other packages that include some isolated implementations of label noise filters, since they are sometimes needed as auxiliary functions. It is the case of the \CRANpkg{unbalanced} \cite{unbalanced} package, which deals with imbalanced classification. It contains basic versions of classical filters such as \emph{Tomek-Links} \cite{tomekLinks} or \emph{ENN} \cite{ENN}, which are tipically applied after oversampling an imbalanced dataset (which is the main purpose of the \pkg{unbalanced} package).
+
+In the following Section \ref{sec:noise} we briefly introduce the problem of classification with label noise, as well as the most popular techniques to overcome it. In Section \ref{sec:package} we show how to use the \pkg{NoiseFiltersR} package to apply these techniques in a unified and R-user-friendly manner. Finally, Section \ref{sec:summary} presents a general overview of this work.
+%and potential extensions.
+Once the package is loaded, the source and R code for this vignette is directly available from R with the command \code{browseVignettes}.
+
+\section{Label noise preprocessing}\label{sec:noise}
+
+Data collection and preparation processes are usually subject to errors in Data Mining applications \cite{wuNoise}. Consequently, real-world datasets are commonly affected by imperfections or \emph{noise}. In classification problems, this noise negatively affects the learning process of classifiers, leading to less accurate predictions, excessively complex models, and longer computation time.
+
+Two different types of noise are usually distinguished in the specialized literature for classification: \emph{attribute} noise and \emph{label} noise (which is also called \emph{class} noise) \cite{attrVSlabel}. The former refers to imperfections in the attributes of the training dataset, whereas the latter relates to errors in the labels used for classification. The \pkg{NoiseFiltersR} package (and the rest of this work) focuses on label noise, which is known to be the most disruptive one, since label quality is essential for the classifier training \cite{attrVSlabel}.
+
+In order to address the problem of label noise, there exist two main approaches in the literature, and both are surveyed in the recent work \cite{frenay}. On the one hand, \emph{algorithm level} approaches \cite{quinlanC45} attempt to create robust classification algorithms that are little influenced by the presence of noise. On the other hand, \emph{data level} approaches \cite{IPF} (also called \emph{filters}) try to develop strategies to cleanse the dataset as a previous step to the fit of the classifier. The \pkg{NoiseFiltersR} package follows the second approach, since this allows to carry out the data preprocessing just once and apply any classifier thereafter, whereas the first option is specific for each classification algorithm\footnote{Of course, in R there exist implementations of very popular label noise robust classifiers (the aforementioned algorithm-level approach), such as \emph{C4.5} and \emph{RIPPER}, which are called \emph{J48} and \emph{JRip} respectively in \CRANpkg{RWeka} package \cite{RWeka} (which is a R interface to WEKA software \cite{Weka}).}.
+
+Regarding data-level handling of label noise, we take the aforementioned survey by Frénay et al. \cite{frenay} as the basis for our \pkg{NoiseFiltersR} package. That work provides an overview and references for the most popular classical and state-of-the-art filters, which are organized and classified taking into account several aspects:
+
+\begin{itemize}
+\item Considering how to identify noisy instances, \emph{ensemble} based, \emph{similarity} based and \emph{data complexity} based algorithms are distinguished. The first type makes use of predictions from classifiers ensembles built over different partitions or resamples of training data, the second is based on label distribution in the nearest neighbors of each instance, and the third attempts to reduce complexity metrics which are related to the presence of noise. As we will explain in Section \ref{sec:package} (see Figure \ref{fig:taxonomy}), the \pkg{NoiseFiltersR} package contains implementations of all these types of algorithms, and the explicit distinction is indicated in the documentation page of each function.
+
+\item Regarding how to deal with the identified noise, \emph{noise removal} and \emph{noise reparation} strategies are considered. The first option removes the noisy instances, whereas the second one relabels them with the most likely label on the basis of the information available. There also exist \emph{hybrid} approaches, which only carry out relabelling when they have enough confidence on the new label, and otherwise remove. The discussion between noise removal, noise reparation and their possible sinergies is an active and open field of research \cite[Section VI.H]{frenay}: most works agree on the potential damages of incorrect relabelling \cite{bettRem}, although other studies also point out the dangers of removing too many instances and advocate hybrid approaches \cite{bettRep}. As we will see in Section \ref{sec:package}, the \pkg{NoiseFiltersR} package includes filters which implement all these possibilities, and the specific behaviour is explicitly indicated in the documentation page of the corresponding function.
+\end{itemize}
+
+
+\section{The \pkg{NoiseFiltersR} package}\label{sec:package}
+
+The released package implements, documents, explains and provides references for a broad collection of label noise filters surveyed in \cite{frenay}. To the best of our knowledge, it is the first comprehensive review and implementation of this topic for R, which has become an essential tool in Data Mining in the last years.
+
+Namely, the \pkg{NoiseFiltersR} package includes a total of 30 filters which were published along 24 research papers (each one of these papers is referenced in the corresponding filter documentation page, see Section \ref{sec:documentation}). Regarding the noise detection strategy, 13 of them are ensemble based filters, 14 can be cataloged as similarity based, and the other 3 are based on data complexity measures. Taking into account the noise handling approach, 4 of them integrate the possibility of relabelling, whereas the other 26 only allow for removing (which clearly evidences a general preference for data removal in the literature). The full list of implemented filters and its distribution according to the two aforementioned criterions is displayed in Figure \ref{fig:taxonomy}, which provides a general overview of the package.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\linewidth]{filterTable}
+\caption{Names and taxonomy of available filters in the \pkg{NoiseFiltersR} package.}
+\label{fig:taxonomy}
+\end{figure}
+
+
+The rest of section is organized as follows. Section \ref{sec:installation} is devoted to the installation process. In Section \ref{sec:documentation} we present the documentation, where further details of each filter can be looked up. Section \ref{sec:calling} focuses on the two implemented methods to call the filters. Finally, Section \ref{sec:class} presents the \code{filter} class, which unifies the return value of the filters in \pkg{NoiseFiltersR} package.
+
+
+\subsection{Installation}\label{sec:installation}
+
+The \pkg{NoiseFiltersR} package is available at CRAN servers, so it can be downloaded and installed directly from the R command line by typing:
+<<install1, eval = FALSE>>=
+install.packages("NoiseFiltersR")
+@
+
+This command will also install the eleven dependencies of the package, which mainly provide the classification algorithms needed for the implemented filters, and which can be looked up in the ``Imports'' section of the CRAN website for the package \url{https://cran.r-project.org/web/packages/NoiseFiltersR/index.html}.
+
+In order to easily access all the package's functions, it must be attached in the usual way:
+<<install2>>=
+library(NoiseFiltersR)
+@
+
+
+\subsection{Documentation}\label{sec:documentation}
+
+Whereas this vignette provides the user with an overview of the \pkg{NoiseFiltersR} package, it is also important to have access to specific information for each available filter. This information can be looked up in the corresponding documentation page, that in all cases includes the following essential items (see Figure \ref{fig:documentation} for an example):
+\begin{itemize}
+\item A \emph{description} section, which indicates the type of filter according to the taxonomy explained at the end of Section \ref{sec:noise} and summarized in Figure \ref{fig:taxonomy}.
+\item A \emph{details} section, which provides the user with a general explanation of the filter's behaviour and any other usage particularity or warning.
+\item A \emph{references} section that points to the original contribution where the filter was proposed, where further details, motivations or contextualization can be found.
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\linewidth]{documentationGE.png}
+\caption{Extract from GE filter's documentation page, showing the highlighted above aspects.}
+\label{fig:documentation}
+\end{figure}
+
+As usually in R, the function documentation pages can be either checked in the CRAN website for the package or loaded from the command line with the orders \code{?} or \code{help}:
+<<document1, eval=FALSE>>=
+?GE
+help(GE)
+@
+
+
+\subsection{Calling the filters}\label{sec:calling}
+
+When it comes to apply a label-noise filter in Data Mining applications, all we need to know is the dataset to be filtered and its \emph{class} variable (i.e. the one that contains the label for each available instance). The \pkg{NoiseFiltersR} package provides two standard ways for tagging the class variable when calling the implemented filters (see also Figure \ref{fig:calling} and the example below):
+\begin{itemize}
+\item The \emph{default} method receives the dataset to be filtered in the \code{x} argument, and the number for the class column through the \code{classColumn} argument. If the latter is not provided, the last column of the dataset is assumed to contain the labels.
+\item The \emph{formula} method is intended for regular R users, who are used to this approach when fitting regression or classification models. It allows for indicating the class variable (along with the attributes to be used) by means of an expression like \code{Class\textasciitilde Attr1+...+AttrN} (recall that \code{Class\textasciitilde .} makes use of all attributes).
+\end{itemize}
+
+\noindent Next, we provide an example on how to use these two methods for filtering out the \code{iris} dataset with \code{edgeBoostFilter} (we do not change the default parameters of the filter):
+<<Calls>>=
+data(iris)
+str(iris)
+# Using the default method:
+out_Def <- edgeBoostFilter(iris, classColumn = 5)
+# Using the formula method:
+out_For <- edgeBoostFilter(Species~., iris)
+# Checking that the filtered datasets are identical:
+identical(out_Def$cleanData, out_For$cleanData)
+@
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\linewidth]{callingFilter.png}
+\caption{Extract from \code{edgeBoostFilter}'s documentation page, which shows the two methods for calling filters in \pkg{NoiseFiltersR} package. In both cases, tuning parameters of the filter are provided through additional arguments.}
+\label{fig:calling}
+\end{figure}
+
+Notice that, in the last command of the example, we used the \code{\$} operator to access the objects returned from the filter. In next section we explore the structure and contents of these objects.
+
+\subsection{The \code{filter} class}\label{sec:class}
+
+The S3 class \code{filter} is designed to unify the return value of the filters inside the \pkg{NoiseFiltersR} package. It is a list that encapsulates seven elements with the most relevant information of the process:
+\begin{itemize}
+\item \code{cleanData} is a data.frame containing the filtered dataset.
+\item \code{remIdx} is a vector of integers indicating the indexes of
+removed instances (i.e. their row number with respect to the original data.frame).
+\item \code{repIdx} is a vector of integers indicating the indexes of
+repaired/relabelled instances (i.e. their row number with respect to the original data.frame).
+\item \code{repLab} is a factor containing the new labels for repaired instances.
+\item \code{parameters} is a list that includes the tuning parameters used for the filter.
+\item \code{call} is an expression that contains the original call to the filter.
+\item \code{extraInf} is a character vector including additional information not covered by previous items.
+\end{itemize}
+
+\noindent As an example, we can check the structure of the above \code{out\_For} object, which was the return value of \code{egdeBoostFilter} function:
+<<filterClass1>>=
+str(out_For)
+@
+
+In order to cleanly display this \code{filter} class in the R console, two specific \code{print} and \code{summary} methods were implemented. The appearance of the first one is as follows
+<<filterClass2>>=
+print(out_For)
+@
+\noindent and contains three main blocks:
+\begin{itemize}
+\item The original \emph{call} to the filter.
+\item The tuning \emph{parameters} used for the filter.
+\item An overview of the \emph{results}, with the number (and percentage of the total) of removed and repaired instances.
+\end{itemize}
+
+\noindent The \code{summary} method displays some extra blocks:
+\begin{itemize}
+\item It always adds a title that summarizes the filter and dataset used.
+\item If there exists additional information in the \code{extraInf} component of the object, it is displayed under a homonymous block.
+\item If the argument \code{explicit} is set to \code{TRUE} (it defaults to \code{FALSE}), the explicit results (i.e. the indexes for removed and repaired instances and the new labels for the latters) are displayed.
+\end{itemize}
+In the case of the \code{out\_For} object, the \code{summary} gets the following:
+<<filterClass3>>=
+summary(out_For, explicit = TRUE)
+@
+
+\section{Summary
+%and potential extensions
+}\label{sec:summary}
+
+In this vignette we introduced the \pkg{NoiseFiltersR} package, which is the first R extensive implementation of classification-oriented label-noise filters. To set a context and motivation for this work, we presented the problem of label noise inside data preprocessing and the related software. As we explained, the released package unifies the return value of the filters by means of a S3 class, which benefits from specific \code{print} and \code{summary} methods. Moreover, it provides a R-user-friendly way to call the implemented filters, whose documentation is worth reading and points to the original reference where they were first published.
+
+Regarding the potential extensions of this package, there exist several aspects which can be adressed in future releases. For instance, there exist some other label-noise filters reviewed in the main reference \cite{frenay} whose noise identification strategy does not belong to the ones covered here: ensemble based, similarity based and data complexity based (as shown in Figure \ref{fig:taxonomy}).
+%Moreover, apart from data-level approaches (recall Section \ref{sec:noise}), the implementation of some state-of-the-art algorithm-level approaches (label noise robust classifiers) could also be tackled.
+A relevant extension would be the inclusion of some datasets with different levels of artificially introduced label noise, in order to ease the experimentation workflow\footnote{A wide variety of such datasets can be downloaded from the KEEL dataset repository in the website \url{http://www.keel.es/}, and then loaded from R.}.
+%Finally, the experience and feedback gained from this R package development and maintenance may lead the authors to develop more R software in the area of Data Preprocessing.
+
+\bibliography{morales}
+\bibliographystyle{plain}
+
+%\address{Francisco Charte\\
+%  Department of Computer Science and Artificial Intelligence\\
+%  University of Granada\\
+%  Granada\\
+%  Spain}
+%\email{fcharte@ugr.es}
+
+%\address{F. David Charte\\
+%  University of Granada\\
+%  Granada\\
+%  Spain}
+%\email{fdavidcl@correo.ugr.es}
+
+\end{document}
