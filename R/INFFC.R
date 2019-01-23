@@ -179,31 +179,3 @@ INFFC.default <- function(x,
       class(ret) <- "filter"
       return(ret)
 }
-
-FusionClassifiers <- function(data, trainingIndexes, majThreshold, returnNoisy=FALSE){
-      predC45 <- predict(RWeka::J48(formula = class~., data = data[trainingIndexes,]),data)
-      pred3NN <- sapply(1:nrow(data),function(i){kknn::kknn(class~.,train=data[setdiff(trainingIndexes,i),],test=data[i,], k=3)$fitted.values})
-      invisible(utils::capture.output(predLOG <- predict(nnet::multinom(class~., data[trainingIndexes,]), data))) #To avoid some messages getting displayed in the console
-      votes <- (predC45 != data$class) + (pred3NN != data$class) + (predLOG != data$class)
-      if(returnNoisy){
-            return(which(votes >= majThreshold))
-      }else{
-            return(which(votes < majThreshold))
-      }
-}
-
-NoiseScore <- function(data,NoisyIndexes,k,indexToScore){
-      neighborsIndexes <- kknn::kknn(class~., train = data[-indexToScore,], test = data[indexToScore, ], k = k)$C
-      sum(sapply(neighborsIndexes,function(i){Confidence(data,NoisyIndexes,k,i)*Clean(data,NoisyIndexes,k,i)*ifelse(data[i,]$class==data[indexToScore,]$class,-1,1)}))/k
-}
-
-Confidence <- function(data,NoisyIndexes,k,index){
-      t <- sum(sapply(NoisyIndexes,function(i){index %in% kknn::kknn(class~., train = data[-i,], test = data[i,], k = k)$C}))
-      1/sqrt(1+t^2)
-}
-
-Clean <- function(data,NoisyIndexes,k,index){
-      neighborsIndexes <- kknn::kknn(class~., train = data[-index,], test = data[index,], k = k)$C
-      n <- sum(sapply(neighborsIndexes,function(i){i %in% NoisyIndexes}))
-      (k+ifelse(index %in% NoisyIndexes,1,-1)*(n-k))/(2*k)
-}

@@ -110,20 +110,20 @@ DROP1.default <- function(x,
       })
       currentAcc <- sum(preds==x[,classColumn])
 
-      toRemove <- integer(0)
+      toRemove <- logical(nrow(x))
       for(j in 1:nrow(x)){
-            predsIn <- sapply(setdiff(1:nrow(x),toRemove),function(i){
-                  kknn::kknn(formula = formu, train = x[-c(i,j,toRemove),], test = x[i,], k = k, kernel = "rectangular")$fitted.values
+            predsIn <- sapply(setdiff(1:nrow(x),which(toRemove)),function(i){
+                  kknn::kknn(formula = formu, train = x[-c(i,j,which(toRemove)),], test = x[i,], k = k, kernel = "rectangular")$fitted.values
             })
-            newAcc <- sum(predsIn==x[setdiff(1:nrow(x),toRemove),classColumn])
+            newAcc <- sum(predsIn==x[setdiff(1:nrow(x),which(toRemove)),classColumn])
             if(newAcc>=currentAcc){
                   currentAcc <- newAcc+ifelse(predsIn[j-length(toRemove)]==x[j,classColumn],-1,0)
-                  toRemove <- c(toRemove,j)
+                  toRemove[j] <- TRUE
             }
       }
 
       ##### Building the 'filter' object ###########
-      remIdx  <- toRemove
+      remIdx  <- which(toRemove)
       cleanData <- x[setdiff(1:nrow(x),remIdx),]
       repIdx <- NULL
       repLab <- NULL
@@ -143,11 +143,6 @@ DROP1.default <- function(x,
       return(ret)
 }
 
-distEnemy <- function(i,data,classColumn){
-      isEnemy <- data[,classColumn]!=data[i,classColumn]
-      dist <- kknn::kknn(as.formula(paste(names(data)[classColumn],"~.",sep = "")), train = data[isEnemy,], test = data[i,], k = 1)$D
-      return(dist)
-}
 
 #' @export
 DROP2 <- function(x, ...)
@@ -199,27 +194,27 @@ DROP2.default <- function(x,
       formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
 
       distsEnemy <- sapply(1:nrow(x),function(i){distEnemy(i,x,classColumn)})
-      removalOrder <- order(distsEnemy,decreasing = TRUE)
+      removalOrder <- order(distsEnemy, decreasing = TRUE)
 
       preds <- sapply(1:nrow(x),function(i){
             kknn::kknn(formula = formu, train = x[-i,], test = x[i,], k = k, kernel = "rectangular")$fitted.values
       })
       currentAcc <- sum(preds==x[,classColumn])
 
-      toRemove <- integer(0)
+      toRemove <- logical(length(removalOrder))
       for(j in removalOrder){
             predsIn <- sapply(1:nrow(x),function(i){
-                  kknn::kknn(formula = formu, train = x[-c(i,j,toRemove),], test = x[i,], k = k, kernel = "rectangular")$fitted.values
+                  kknn::kknn(formula = formu, train = x[-c(i,j,which(toRemove)),], test = x[i,], k = k, kernel = "rectangular")$fitted.values
             })
             newAcc <- sum(predsIn==x[,classColumn])
             if(newAcc>=currentAcc){
                   currentAcc <- newAcc
-                  toRemove <- c(toRemove,j)
+                  toRemove[j] <- TRUE
             }
       }
 
       ##### Building the 'filter' object ###########
-      remIdx  <- toRemove
+      remIdx  <- which(toRemove)
       cleanData <- x[setdiff(1:nrow(x),remIdx),]
       repIdx <- NULL
       repLab <- NULL
@@ -305,21 +300,21 @@ DROP3.default <- function(x,
       })
       currentAcc <- sum(preds==x[,classColumn])
 
-      toRemove <- integer(0)
+      toRemove <- logical(removalOrder)
       for(j in removalOrder){
             predsIn <- sapply(1:nrow(x),function(i){
-                  kknn::kknn(formula = formu, train = x[-c(i,j,toRemove),], test = x[i,], k = k, kernel = "rectangular")$fitted.values
+                  kknn::kknn(formula = formu, train = x[-c(i,j,which(toRemove)),], test = x[i,], k = k, kernel = "rectangular")$fitted.values
             })
             newAcc <- sum(predsIn==x[,classColumn])
             if(newAcc>=currentAcc){
                   currentAcc <- newAcc
-                  toRemove <- c(toRemove,j)
+                  toRemove[j] <- TRUE
             }
       }
 
       ##### Building the 'filter' object ###########
-      remIdx  <- c(remIdx,initiallyKept[toRemove])
-      cleanData <- x[setdiff(1:nrow(x),toRemove),]
+      remIdx  <- c(remIdx,initiallyKept[which(toRemove)])
+      cleanData <- x[setdiff(1:nrow(x),which(toRemove)),]
       repIdx <- NULL
       repLab <- NULL
       parameters <- list(k=k)

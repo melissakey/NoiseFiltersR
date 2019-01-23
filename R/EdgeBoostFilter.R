@@ -161,9 +161,3 @@ edgeBoostFilter.default <- function(x,
       return(ret)
 
 }
-
-weightedC45 <- function(data,weights,formu){
-      N <- 1/min(weights[which(weights>1e-5)])
-      dataTrain <- data[rep(seq_len(nrow(data)),times=round(weights*N)),]
-      return(RWeka::J48(formu,dataTrain))
-}

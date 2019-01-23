@@ -49,140 +49,109 @@ NULL
 #' @export
 ENG <- function(x, ...)
 {
-      UseMethod("ENG")
+  UseMethod("ENG")
 }
 
 #' @rdname ENG
 #' @export
 ENG.formula <- function(formula,
-                        data,
-                        ...)
+  data,
+  ...)
 {
-      if(!is.data.frame(data)){
-            stop("data argument must be a data.frame")
-      }
-      modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
-      attr(modFrame,"terms") <- NULL
-
-      ret <- ENG.default(x=modFrame,...,classColumn = 1)
-      ret$call <- match.call(expand.dots = TRUE)
-      ret$call[[1]] <- as.name("ENG")
-      # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
-      cleanData <- data
-      if(!is.null(ret$repIdx)){
-            cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
-      }
-      ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
-      return(ret)
+  if(!is.data.frame(data)){
+    stop("data argument must be a data.frame")
+  }
+  modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
+  attr(modFrame,"terms") <- NULL
+  
+  ret <- ENG.default(x=modFrame,...,classColumn = 1)
+  ret$call <- match.call(expand.dots = TRUE)
+  ret$call[[1]] <- as.name("ENG")
+  # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
+  cleanData <- data
+  if(!is.null(ret$repIdx)){
+    cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
+  }
+  ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
+  return(ret)
 }
 
 #' @rdname ENG
 #' @export
 ENG.default <- function(x,
-                        graph = "RNG",
-                        classColumn=ncol(x),
-                        ...)
+  graph = "RNG",
+  classColumn=ncol(x),
+  ...)
 {
-      if(!is.data.frame(x)){
-            stop("data argument must be a data.frame")
-      }
-      if(!classColumn%in%(1:ncol(x))){
-            stop("class column out of range")
-      }
-      if(!is.factor(x[,classColumn])){
-            stop("class column of data must be a factor")
-      }
-      if(!graph%in%c("RNG","GG")){
-            stop("the 'graph' argument must be either 'GG' (Gabriel Graph) or 'RNG' (Relative Neighborhood Graph)")
-      }
-
-      PG <- sapply(1:(nrow(x)-1),function(i){c(rep(NA,i),
-                                              sapply((i+1):nrow(x),function(j){isNeighbor(i,j,x,graph,classColumn)}))})
-      PG <- cbind(PG,rep(NA,nrow(x)))
-      for(i in 1:(nrow(x)-1)){
-            for(j in (i+1):nrow(x)){
-                  PG[i,j] <- PG[j,i]
-            }
-      }
-
-      #First order graph
-      isMisclassified <- sapply(1:nrow(x),function(i){
-            classes <- table(x[PG[i,],classColumn])
-            if(names(classes)[nnet::which.is.max(classes)]==x[i,classColumn]){
-                  out <- FALSE
-            }else{
-                  out <- TRUE
-            }
-            return(out)
-      })
-
-      #Second order graph
-      toRemove <- sapply(which(isMisclassified),function(i){
-            sameClassNeigh <- c(i,which(PG[i,] & x[,classColumn]==x[i,classColumn]))
-            classes <- character(0)
-            for(j in sameClassNeigh){
-                  classes <- c(classes,as.character(x[PG[j,],classColumn]))
-            }
-            tableClasses <- table(classes)
-            if(names(tableClasses)[nnet::which.is.max(tableClasses)]==x[i,classColumn]){
-                  out <- FALSE
-            }
-            else{
-                  out <- TRUE
-            }
-            return(out)
-      })
-
-      ##### Building the 'filter' object ###########
-      remIdx  <- which(isMisclassified)[toRemove]
-      cleanData <- x[setdiff(1:nrow(x),remIdx),]
-      repIdx <- NULL
-      repLab <- NULL
-      parameters <- list(graph=graph)
-      call <- match.call()
-      call[[1]] <- as.name("ENG")
-
-      ret <- list(cleanData = cleanData,
-                  remIdx = remIdx,
-                  repIdx=repIdx,
-                  repLab=repLab,
-                  parameters=parameters,
-                  call = call,
-                  extraInf = NULL
-      )
-      class(ret) <- "filter"
-      return(ret)
-}
-
-distt <- function(x,y){
-      class <- sapply(x,class)
-      if("factor"%in%class){
-            out <- sum((x[1,class!="factor"]-y[1,class!="factor"])^2)+sum(x[1,class=="factor"]!=y[1,class=="factor"])
-      }
-      else{
-            out <- sum((x-y)^2)
-      }
-      out <- sqrt(out)
-      return(out)
-}
-
-isNeighbor <- function(i, j, data, graphType, classColumn){
+  if(!is.data.frame(x)){
+    stop("data argument must be a data.frame")
+  }
+  if(!classColumn%in%(1:ncol(x))){
+    stop("class column out of range")
+  }
+  if(!is.factor(x[,classColumn])){
+    stop("class column of data must be a factor")
+  }
+  if(!graph%in%c("RNG","GG")){
+    stop("the 'graph' argument must be either 'GG' (Gabriel Graph) or 'RNG' (Relative Neighborhood Graph)")
+  }
+  
+  distMat <- as.matrix(
+    dist(
+      as.matrix(x[setdiff(which(sapply(x, class) == 'numeric'), classColumn)])
+    )
+  )
+  fun <- switch(graph,
+    RNG = pmax,
+    GG = function(x, y) x^2 + y^2
+  )
+  PG <- isNeighbor(distMat, fun)
+  
+  #First order graph
+  isMisclassified <- sapply(1:nrow(x),function(i){
+    classes <- table(x[PG[i,],classColumn])
+    if(names(classes)[nnet::which.is.max(classes)]==x[i,classColumn]){
+      out <- FALSE
+    }else{
       out <- TRUE
-      if(graphType=="GG"){
-            for(k in 1:nrow(data)){
-                  if(distt(data[i,- classColumn],data[j,- classColumn])^2 > (distt(data[i,- classColumn],data[k,- classColumn])^2 + distt(data[j,- classColumn],data[k,- classColumn])^2)){
-                        out <- FALSE
-                        break
-                  }
-            }
-      }
-      else{
-            for(k in 1:nrow(data)){
-                  if(distt(data[i,- classColumn],data[j,- classColumn]) > max(distt(data[i,- classColumn],data[k,- classColumn]),distt(data[j,- classColumn],data[k,- classColumn]))){
-                        out <- FALSE
-                        break
-                  }
-            }
-      }
-      return(out)
+    }
+    return(out)
+  })
+  
+  #Second order graph
+  toRemove <- sapply(which(isMisclassified),function(i){
+    sameClassNeigh <- c(i,which(PG[i,] & x[,classColumn]==x[i,classColumn]))
+    classes <- character(0)
+    for(j in sameClassNeigh){
+      classes <- c(classes,as.character(x[PG[j,],classColumn]))
+    }
+    tableClasses <- table(classes)
+    if(names(tableClasses)[nnet::which.is.max(tableClasses)]==x[i,classColumn]){
+      out <- FALSE
+    }
+    else{
+      out <- TRUE
+    }
+    return(out)
+  })
+  
+  ##### Building the 'filter' object ###########
+  remIdx  <- which(isMisclassified)[toRemove]
+  cleanData <- x[setdiff(1:nrow(x),remIdx),]
+  repIdx <- NULL
+  repLab <- NULL
+  parameters <- list(graph=graph)
+  call <- match.call()
+  call[[1]] <- as.name("ENG")
+  
+  ret <- list(cleanData = cleanData,
+    remIdx = remIdx,
+    repIdx=repIdx,
+    repLab=repLab,
+    parameters=parameters,
+    call = call,
+    extraInf = NULL
+  )
+  class(ret) <- "filter"
+  return(ret)
 }

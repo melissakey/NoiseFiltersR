@@ -125,16 +125,15 @@ EWF.default <- function(x,
       }))
       names(dataS) <- names(x)
 
+      
       # Creating Relative Neighborhood Graph
-      graph <- sapply(1:(nrow(dataS)-1),function(i){c(rep(NA,i),
-                                                  sapply((i+1):nrow(dataS),function(j){
-                                                        isNeighbor(i,j,dataS,"RNG",classColumn)}))})
-      graph <- cbind(graph,rep(NA,nrow(dataS)))
-      for(i in 1:(nrow(dataS)-1)){
-            for(j in (i+1):nrow(dataS)){
-                  graph[i,j] <- graph[j,i]
-            }
-      }
+      distMat <- as.matrix(
+        dist(
+          as.matrix(dataS[setdiff(which(sapply(dataS, class) == 'numeric'), classColumn)])
+        )
+      )
+      graph <- isNeighbor(distMat, pmax)
+      
 
       # Using cut edge weight statistic to indentify suspects
       isSuspect <- sapply(1:nrow(dataS),function(i){

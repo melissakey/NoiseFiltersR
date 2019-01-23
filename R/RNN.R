@@ -48,106 +48,109 @@ NULL
 #' @export
 RNN <- function(x, ...)
 {
-      UseMethod("RNN")
+  UseMethod("RNN")
 }
 
 #' @rdname RNN
 #' @export
 RNN.formula <- function(formula,
-                        data,
-                        ...)
+  data,
+  ...)
 {
-      if(!is.data.frame(data)){
-            stop("data argument must be a data.frame")
-      }
-      modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
-      attr(modFrame,"terms") <- NULL
-
-      ret <- RNN.default(x=modFrame,...,classColumn = 1)
-      ret$call <- match.call(expand.dots = TRUE)
-      ret$call[[1]] <- as.name("RNN")
-      # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
-      cleanData <- data
-      if(!is.null(ret$repIdx)){
-            cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
-      }
-      ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
-      return(ret)
+  if(!is.data.frame(data)){
+    stop("data argument must be a data.frame")
+  }
+  modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
+  attr(modFrame,"terms") <- NULL
+  
+  ret <- RNN.default(x=modFrame,...,classColumn = 1)
+  ret$call <- match.call(expand.dots = TRUE)
+  ret$call[[1]] <- as.name("RNN")
+  # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
+  cleanData <- data
+  if(!is.null(ret$repIdx)){
+    cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
+  }
+  ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
+  return(ret)
 }
 
 #' @rdname RNN
 #' @export
 RNN.default <- function(x,
-                        classColumn=ncol(x),
-                        ...)
+  classColumn=ncol(x),
+  ...)
 {
-      if(!is.data.frame(x)){
-            stop("data argument must be a data.frame")
+  if(!is.data.frame(x)){
+    stop("data argument must be a data.frame")
+  }
+  if(!classColumn%in%(1:ncol(x))){
+    stop("class column out of range")
+  }
+  if(!is.factor(x[,classColumn])){
+    stop("class column of data must be a factor")
+  }
+  
+  formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
+  
+  firstDif <- which(x[,classColumn]!=x[1,classColumn])[1]
+  store <- logical(nrow(x))
+  store[c(1, firstDif)] <- TRUE
+  # store <- c(1,firstDif)
+  grabBag <- setdiff(1:firstDif,which(store))
+  for(i in (firstDif+1):nrow(x)){
+    if(kknn::kknn(formula = formu,
+      train = x[store,],
+      test = x[i,],k = 1)$fitted.values==x[i,classColumn]){
+      grabBag <- c(grabBag,i)
+    }else{
+      store[i] <- TRUE
+    }
+  }
+  
+  KeepOn <- TRUE
+  while(KeepOn){
+    KeepOn <- FALSE
+    for(i in grabBag){
+      if(kknn::kknn(formula = formu,
+        train = x[store,],
+        test = x[i,],k=1)$fitted.values!=x[i,classColumn]){
+        store[i] <- TRUE
+        grabBag <- setdiff(grabBag,i)
+        KeepOn <- TRUE
       }
-      if(!classColumn%in%(1:ncol(x))){
-            stop("class column out of range")
-      }
-      if(!is.factor(x[,classColumn])){
-            stop("class column of data must be a factor")
-      }
-
-      formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
-
-      firstDif <- which(x[,classColumn]!=x[1,classColumn])[1]
-      store <- c(1,firstDif)
-      grabBag <- setdiff(1:firstDif,store)
-      for(i in (firstDif+1):nrow(x)){
-            if(kknn::kknn(formula = formu,
-                          train = x[store,],
-                          test = x[i,],k = 1)$fitted.values==x[i,classColumn]){
-                  grabBag <- c(grabBag,i)
-            }else{
-                  store <- c(store,i)
-            }
-      }
-
-      KeepOn <- TRUE
-      while(KeepOn){
-            KeepOn <- FALSE
-            for(i in grabBag){
-                  if(kknn::kknn(formula = formu,
-                                train = x[store,],
-                                test = x[i,],k=1)$fitted.values!=x[i,classColumn]){
-                        store <- c(store,i)
-                        grabBag <- setdiff(grabBag,i)
-                        KeepOn <- TRUE
-                  }
-            }
-      }
-
-      for(i in store){
-            if(all(kknn::kknn(formu,
-                          train = x[setdiff(store,i),],
-                          test = x,
-                          k = 1)==x[,classColumn])){
-                  store <- setdiff(store,i)
-            }
-      }
-
-      ##### Building the 'filter' object ###########
-      remIdx  <- setdiff(1:nrow(x),sort(store))
-      cleanData <- x[sort(store),]
-      repIdx <- NULL
-      repLab <- NULL
-      parameters <- NULL
-      call <- match.call()
-      call[[1]] <- as.name("RNN")
-
-      ret <- list(cleanData = cleanData,
-                  remIdx = remIdx,
-                  repIdx=repIdx,
-                  repLab=repLab,
-                  parameters=parameters,
-                  call = call,
-                  extraInf = NULL
-      )
-      class(ret) <- "filter"
-      return(ret)
+    }
+  }
+  
+  w_store <- which(store)
+  for(i in w_store){
+    if(all(kknn::kknn(formu,
+      train = x[setdiff(w_store,i),],
+      test = x,
+      k = 1)$fitted.values == x[,classColumn] )){
+      w_store <- setdiff(w_store,i)
+    }
+  }
+  
+  ##### Building the 'filter' object ###########
+  remIdx  <- setdiff(1:nrow(x),sort(w_store))
+  cleanData <- x[sort(w_store),]
+  repIdx <- NULL
+  repLab <- NULL
+  parameters <- NULL
+  call <- match.call()
+  call[[1]] <- as.name("RNN")
+  
+  ret <- list(cleanData = cleanData,
+    remIdx = remIdx,
+    repIdx=repIdx,
+    repLab=repLab,
+    parameters=parameters,
+    call = call,
+    extraInf = NULL
+  )
+  class(ret) <- "filter"
+  return(ret)
 }
 
 

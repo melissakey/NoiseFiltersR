@@ -45,121 +45,130 @@ NULL
 #' @export
 BBNR <- function(x, ...)
 {
-      UseMethod("BBNR")
+  UseMethod("BBNR")
 }
 
 #' @rdname BBNR
 #' @export
 BBNR.formula <- function(formula,
-                         data,
-                         ...)
+  data,
+  ...)
 {
-      if(!is.data.frame(data)){
-            stop("data argument must be a data.frame")
-      }
-      modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
-      attr(modFrame,"terms") <- NULL
-
-      ret <- BBNR.default(x=modFrame,...,classColumn = 1)
-      ret$call <- match.call(expand.dots = TRUE)
-      ret$call[[1]] <- as.name("BBNR")
-      # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
-      cleanData <- data
-      if(!is.null(ret$repIdx)){
-            cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
-      }
-      ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
-      return(ret)
+  if(!is.data.frame(data)){
+    stop("data argument must be a data.frame")
+  }
+  modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
+  attr(modFrame,"terms") <- NULL
+  
+  ret <- BBNR.default(x=modFrame,...,classColumn = 1)
+  ret$call <- match.call(expand.dots = TRUE)
+  ret$call[[1]] <- as.name("BBNR")
+  # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
+  cleanData <- data
+  if(!is.null(ret$repIdx)){
+    cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
+  }
+  ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
+  return(ret)
 }
 
 #' @rdname BBNR
 #' @export
 BBNR.default <- function(x,
-                         k=3,
-                         classColumn=ncol(x),
-                         ...)
+  k=3,
+  classColumn=ncol(x),
+  ...)
 {
-      if(!is.data.frame(x)){
-            stop("data argument must be a data.frame")
+  if(!is.data.frame(x)){
+    stop("data argument must be a data.frame")
+  }
+  if(!classColumn%in%(1:ncol(x))){
+    stop("class column out of range")
+  }
+  if(!is.factor(x[,classColumn])){
+    stop("class column of data must be a factor")
+  }
+  
+  formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
+  
+  knnInf <- sapply(1:nrow(x),function(i){
+    model <- kknn::kknn(formula = formu,
+      train = x[-i,],
+      test = x[i,],
+      k = k,
+      kernel = "rectangular")
+    isMisclassified <- model$fitted.values == x[i,classColumn]
+    nearestNeigh <- setdiff(1:nrow(x),i)[model$C]
+    c(isMisclassified,nearestNeigh)
+  })
+  
+  isMisclassified <- as.logical(knnInf[1,])
+  knnNeigh <- knnInf[-1,]
+  
+  classifiesWellOther <- lapply(which(!isMisclassified),function(i){
+    knnNeigh[x[knnNeigh[,i],classColumn]==x[i,classColumn],i]
+  })
+  coverageSets <- list()
+  length(coverageSets) <- nrow(x)
+  for(i in length(classifiesWellOther)){
+    items <- classifiesWellOther[[i]]
+    for(j in items){
+      coverageSets[[j]] <- c(coverageSets[[j]],i)
+    }
+  }
+  
+  misclassifyOther <- lapply(which(isMisclassified),function(i){
+    knnNeigh[x[knnNeigh[,i],classColumn]!=x[i,classColumn],i]
+  })
+  toExamine <- unlist(misclassifyOther)
+  counts <- table(toExamine)
+  toExamine <- as.integer(names(counts)[order(counts,decreasing = TRUE)])
+  
+  #Examine in order
+  toRemove <- sapply(toExamine, function(i) {
+    if(!is.null(coverageSets[[i]])) {
+      training <- x[setdiff(1:nrow(x), )]
+    }
+  }
+    
+  )
+  
+  toRemove <- rep(NA,length(toExamine))
+  for(j in 1:length(toExamine)){
+    i <- toExamine[j]
+    if(!is.null(coverageSets[[i]])){
+      training <- x[setdiff(1:nrow(x),c(toRemove,i)),]
+      affectsRemoval <- kknn::kknn(formula = formu,
+        train = training,
+        test = x[coverageSets[[i]],],
+        k = k,
+        kernel = "rectangular")$fitted.values != x[coverageSets[[i]],classColumn]
+      if(all(!affectsRemoval)){
+        toRemove[j] <- i
       }
-      if(!classColumn%in%(1:ncol(x))){
-            stop("class column out of range")
-      }
-      if(!is.factor(x[,classColumn])){
-            stop("class column of data must be a factor")
-      }
-
-      formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
-
-      knnInf <- sapply(1:nrow(x),function(i){
-            model <- kknn::kknn(formula = formu,
-                                train = x[-i,],
-                                test = x[i,],
-                                k = k,
-                                kernel = "rectangular")
-            isMisclassified <- model$fitted.values == x[i,classColumn]
-            nearestNeigh <- setdiff(1:nrow(x),i)[model$C]
-            c(isMisclassified,nearestNeigh)
-      })
-
-      isMisclassified <- as.logical(knnInf[1,])
-      knnNeigh <- knnInf[-1,]
-
-      classifiesWellOther <- lapply(which(!isMisclassified),function(i){
-            knnNeigh[x[knnNeigh[,i],classColumn]==x[i,classColumn],i]
-      })
-      coverageSets <- list()
-      length(coverageSets) <- nrow(x)
-      for(i in length(classifiesWellOther)){
-            items <- classifiesWellOther[[i]]
-            for(j in items){
-                  coverageSets[[j]] <- c(coverageSets[[j]],i)
-            }
-      }
-
-      misclassifyOther <- lapply(which(isMisclassified),function(i){
-            knnNeigh[x[knnNeigh[,i],classColumn]!=x[i,classColumn],i]
-      })
-      toExamine <- unlist(misclassifyOther)
-      counts <- table(toExamine)
-      toExamine <- as.integer(names(counts)[order(counts,decreasing = TRUE)])
-
-      #Examine in order
-      toRemove <- integer(0)
-      for(i in toExamine){
-            if(!is.null(coverageSets[[i]])){
-                  training <- x[setdiff(1:nrow(x),c(toRemove,i)),]
-                  affectsRemoval <- kknn::kknn(formula = formu,
-                                               train = training,
-                                               test = x[coverageSets[[i]],],
-                                               k = k,
-                                               kernel = "rectangular")$fitted.values != x[coverageSets[[i]],classColumn]
-                  if(all(!affectsRemoval)){
-                        toRemove <- c(toRemove,i)
-                  }
-            }
-            else{
-                  toRemove <- c(toRemove,i)
-            }
-      }
-
-      ##### Building the 'filter' object ###########
-      remIdx  <- toRemove
-      cleanData <- x[setdiff(1:nrow(x),remIdx),]
-      repIdx <- NULL
-      repLab <- NULL
-      parameters <- list(k=k)
-      call <- match.call()
-      call[[1]] <- as.name("BBNR")
-
-      ret <- list(cleanData = cleanData,
-                  remIdx = remIdx,
-                  repIdx=repIdx,
-                  repLab=repLab,
-                  parameters=parameters,
-                  call = call,
-                  extraInf = NULL)
-
-      class(ret) <- "filter"
-      return(ret)
+    }
+    else{
+      toRemove[j] <- i
+    }
+  }
+  
+  ##### Building the 'filter' object ###########
+  remIdx  <- toRemove[!is.na(toRemove)]
+  cleanData <- x[setdiff(1:nrow(x),remIdx),]
+  repIdx <- NULL
+  repLab <- NULL
+  parameters <- list(k=k)
+  call <- match.call()
+  call[[1]] <- as.name("BBNR")
+  
+  ret <- list(cleanData = cleanData,
+    remIdx = remIdx,
+    repIdx=repIdx,
+    repLab=repLab,
+    parameters=parameters,
+    call = call,
+    extraInf = NULL)
+  
+  class(ret) <- "filter"
+  return(ret)
 }
