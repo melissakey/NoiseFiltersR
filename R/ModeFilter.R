@@ -120,11 +120,7 @@ ModeFilter.default <- function(x,
 
       similarity <- sapply(1:nrow(x),function(i){c(rep(NA,i-1),
                                                 sapply(i:nrow(x),function(j){exp(-alpha*distt(x[i,-classColumn],x[j,-classColumn])^2)}))})
-      for(i in 1:(nrow(x)-1)){
-            for(j in (i+1):nrow(x)){
-                  similarity[i,j] <- similarity[j,i]
-            }
-      }
+      similarity <- similarity + t(similarity)
       labels <- levels(x[,classColumn])
 
 
