@@ -118,6 +118,8 @@ ModeFilter.default <- function(x,
             stop("argument 'epsilon' must range between 0 and 1")
       }
 
+  
+      similarity <- matrix(NA, ncol = nrow(x), nrow = nrow(x))
       similarity <- sapply(1:nrow(x),function(i){c(rep(NA,i-1),
                                                 sapply(i:nrow(x),function(j){exp(-alpha*distt(x[i,-classColumn],x[j,-classColumn])^2)}))})
       similarity <- similarity + t(similarity)
