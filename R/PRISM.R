@@ -45,82 +45,82 @@ NULL
 #' @export
 PRISM <- function(x, ...)
 {
-      UseMethod("PRISM")
+  UseMethod("PRISM")
 }
 
 #' @rdname PRISM
 #' @export
 PRISM.formula <- function(formula,
-                          data,
-                          ...)
+  data,
+  ...)
 {
-      if(!is.data.frame(data)){
-            stop("data argument must be a data.frame")
-      }
-      modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
-      attr(modFrame,"terms") <- NULL
-
-      ret <- PRISM.default(x=modFrame,...,classColumn = 1)
-      ret$call <- match.call(expand.dots = TRUE)
-      ret$call[[1]] <- as.name("PRISM")
-      # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
-      cleanData <- data
-      if(!is.null(ret$repIdx)){
-            cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
-      }
-      ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
-      return(ret)
+  if(!is.data.frame(data)){
+    stop("data argument must be a data.frame")
+  }
+  modFrame <- model.frame(formula,data) # modFrame is a data.frame built from 'data' using the variables indicated in 'formula'. The first column of 'modFrame' is the response variable, thus we will indicate 'classColumn=1' when calling the HARF.default method in next line.
+  attr(modFrame,"terms") <- NULL
+  
+  ret <- PRISM.default(x=modFrame,...,classColumn = 1)
+  ret$call <- match.call(expand.dots = TRUE)
+  ret$call[[1]] <- as.name("PRISM")
+  # Next, we reconstruct the 'cleanData' from the removed and repaired indexes. Otherwise, the 'cleanData' would only contain those columns passed to the default method (for example imagine when running HARF(Species~Petal.Width+Sepal.Length,iris)).
+  cleanData <- data
+  if(!is.null(ret$repIdx)){
+    cleanData[ret$repIdx,which(colnames(cleanData)==colnames(modFrame)[1])] <- ret$repLab  # This is not necessary in HARF because it only removes instances, it does not relabel. However, it must be used when the algorithm relabels instances (in our part there are some of them).
+  }
+  ret$cleanData <- cleanData[setdiff(1:nrow(cleanData),ret$remIdx),]
+  return(ret)
 }
 
 #' @rdname PRISM
 #' @export
 PRISM.default <- function(x,
-                          classColumn=ncol(x),
-                          ...)
+  classColumn=ncol(x),
+  ...)
 {
-      if(!is.data.frame(x)){
-            stop("data argument must be a data.frame")
-      }
-      if(!classColumn%in%(1:ncol(x))){
-            stop("class column out of range")
-      }
-      if(!is.factor(x[,classColumn])){
-            stop("class column of data must be a factor")
-      }
-
-      toRemove <- sapply(1:nrow(x),function(i){
-            if(cld(i,x,classColumn)>=0){
-                  return(FALSE)
-            }
-            if(dn(i,x,classColumn)>0.8){
-                  return(TRUE)
-            }
-            if(dcp(i,x,classColumn)>=0.5){
-                  return(FALSE)
-            }
-            if(ds(i,x,classColumn)==0){
-                  return(TRUE)
-            }
-            return(FALSE)
-      })
-
-
-      ##### Building the 'filter' object ###########
-      remIdx  <- which(toRemove)
-      cleanData <- x[setdiff(1:nrow(x),remIdx),]
-      repIdx <- NULL
-      repLab <- NULL
-      call <- match.call()
-      call[[1]] <- as.name("PRISM")
-
-      ret <- list(cleanData = cleanData,
-                  remIdx = remIdx,
-                  repIdx=repIdx,
-                  repLab=repLab,
-                  parameters=NULL,
-                  call = call,
-                  extraInf = NULL
-      )
-      class(ret) <- "filter"
-      return(ret)
+  if(!is.data.frame(x)){
+    stop("data argument must be a data.frame")
+  }
+  if(!classColumn%in%(1:ncol(x))){
+    stop("class column out of range")
+  }
+  if(!is.factor(x[,classColumn])){
+    stop("class column of data must be a factor")
+  }
+  
+  toRemove <- sapply(1:nrow(x),function(i){
+    if(dn(i,x,classColumn)>0.8){
+      return(TRUE)
+    }
+    if(cld(i,x,classColumn)>=0){
+      return(FALSE)
+    }
+    if(dcp(i,x,classColumn)>=0.5){
+      return(FALSE)
+    }
+    if(ds(i,x,classColumn)==0){
+      return(TRUE)
+    }
+    return(FALSE)
+  })
+  
+  
+  ##### Building the 'filter' object ###########
+  remIdx  <- which(toRemove)
+  cleanData <- x[setdiff(1:nrow(x),remIdx),]
+  repIdx <- NULL
+  repLab <- NULL
+  call <- match.call()
+  call[[1]] <- as.name("PRISM")
+  
+  ret <- list(cleanData = cleanData,
+    remIdx = remIdx,
+    repIdx=repIdx,
+    repLab=repLab,
+    parameters=NULL,
+    call = call,
+    extraInf = NULL
+  )
+  class(ret) <- "filter"
+  return(ret)
 }
