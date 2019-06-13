@@ -42,7 +42,7 @@ distEnemy <- function(i,data,classColumn){
 ### PRISM functions
 cld <- function(i,data,classColumn){
   classes <- unique(data[,classColumn])
-  system.time(probs <- sapply(classes,function(cl){
+  probs <- sapply(classes,function(cl){
     thisClass <- data[,classColumn]==cl
     sapply(setdiff(1:ncol(data),classColumn),function(att){
       if(is.factor(data[,att]) | is.logical(data[,att])){
@@ -54,7 +54,7 @@ cld <- function(i,data,classColumn){
         stats::dnorm(data[i,att], mean = m, sd = d)
       }
     })
-  }))
+  })
   probsPerClass <- apply(probs,2,prod)
   classIdx <- which(classes==data[i,classColumn])
   probsPerClass[classIdx]-max(probsPerClass[-classIdx])
