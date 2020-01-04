@@ -144,7 +144,7 @@ EWF.default <- function(x,
             statisticMean <- (1-propClass)*sum(weights)
             statisticSD <- (1-propClass)*propClass*sum(weights^2)
             pvalue <- stats::pnorm(statisticValue,statisticMean,statisticMean)
-            ifelse(pvalue<threshold,FALSE,TRUE)
+            !(pvalue<threshold)
       })
 
       # Handling suspects

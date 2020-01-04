@@ -120,8 +120,10 @@ ModeFilter.default <- function(x,
 
   
       similarity <- matrix(NA, ncol = nrow(x), nrow = nrow(x))
-      similarity <- sapply(1:nrow(x),function(i){c(rep(NA,i-1),
-                                                sapply(i:nrow(x),function(j){exp(-alpha*distt(x[i,-classColumn],x[j,-classColumn])^2)}))})
+      similarity <- sapply(1:nrow(x),function(i){
+        c(rep(NA,i-1),
+          sapply(i:nrow(x),
+            function(j){exp(-alpha*distt(x[i,-classColumn],x[j,-classColumn])^2)}))})
       similarity <- similarity + t(similarity)
       labels <- levels(x[,classColumn])
 
@@ -129,7 +131,7 @@ ModeFilter.default <- function(x,
       if(type=="classical"){
             newClass <- sapply(1:nrow(x),function(i){
                   sumsPerClass <- sapply(labels,function(label){
-                        sum(similarity[x[,classColumn]==label,i])+exp(-beta)*sum(similarity[x[,classColumn]!=label,i])
+                        sum(similarity[x[,classColumn]==label,i]) * exp(-beta)*sum(similarity[x[,classColumn]!=label,i])
                   })
                   labels[nnet::which.is.max(sumsPerClass)]
             })
@@ -142,7 +144,7 @@ ModeFilter.default <- function(x,
                   oldClass <- currentClass
                   currentClass <- sapply(1:nrow(x),function(i){
                         sumsPerClass <- sapply(labels,function(label){
-                              sum(similarity[currentClass==label,i])+exp(-beta)*sum(similarity[currentClass!=label,i])
+                              sum(similarity[currentClass==label,i]) * exp(-beta)*sum(similarity[currentClass!=label,i])
                         })
                         labels[nnet::which.is.max(sumsPerClass)]
                   })
@@ -153,7 +155,7 @@ ModeFilter.default <- function(x,
       }
       if(type=="weighted"){
             weights <- sapply(1:nrow(x),function(i){
-                  (sum(similarity[i,x[,classColumn]==x[i,classColumn]])+exp(-beta)*sum(similarity[i,x[,classColumn]!=x[i,classColumn]]))/sum(similarity[i,])
+                  (sum(similarity[i,x[,classColumn]==x[i,classColumn]]) * exp(-beta)*sum(similarity[i,x[,classColumn]!=x[i,classColumn]]))/sum(similarity[i,])
             })
             newClass <- sapply(1:nrow(x),function(i){
                   sumsPerClass <- sapply(labels,function(label){

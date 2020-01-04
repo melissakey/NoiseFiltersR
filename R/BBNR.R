@@ -88,7 +88,7 @@ BBNR.default <- function(x,
   if(!is.factor(x[,classColumn])){
     stop("class column of data must be a factor")
   }
-  
+ 
   formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
   
   knnInf <- sapply(1:nrow(x),function(i){
@@ -127,33 +127,43 @@ BBNR.default <- function(x,
   #Examine in order
   toRemove <- sapply(toExamine, function(i) {
     if(!is.null(coverageSets[[i]])) {
-      training <- x[setdiff(1:nrow(x), )]
-    }
-  }
-    
-  )
-  
-  toRemove <- rep(NA,length(toExamine))
-  for(j in 1:length(toExamine)){
-    i <- toExamine[j]
-    if(!is.null(coverageSets[[i]])){
-      training <- x[setdiff(1:nrow(x),c(toRemove,i)),]
+      training <- x[setdiff(1:nrow(x), i), ]
       affectsRemoval <- kknn::kknn(formula = formu,
         train = training,
         test = x[coverageSets[[i]],],
         k = k,
         kernel = "rectangular")$fitted.values != x[coverageSets[[i]],classColumn]
       if(all(!affectsRemoval)){
-        toRemove[j] <- i
+        return(TRUE)
       }
+      return(FALSE)
     }
     else{
-      toRemove[j] <- i
+      return(TRUE)
     }
-  }
+  })
+  
+  # toRemove <- rep(NA,length(toExamine))
+  # for(j in 1:length(toExamine)){
+  #   i <- toExamine[j]
+  #   if(!is.null(coverageSets[[i]])){
+  #     training <- x[setdiff(1:nrow(x),c(toRemove,i)),]
+  #     affectsRemoval <- kknn::kknn(formula = formu,
+  #       train = training,
+  #       test = x[coverageSets[[i]],],
+  #       k = k,
+  #       kernel = "rectangular")$fitted.values != x[coverageSets[[i]],classColumn]
+  #     if(all(!affectsRemoval)){
+  #       toRemove[j] <- i
+  #     }
+  #   }
+  #   else{
+  #     toRemove[j] <- i
+  #   }
+  # }
   
   ##### Building the 'filter' object ###########
-  remIdx  <- toRemove[!is.na(toRemove)]
+  remIdx  <- toExamine[toRemove]
   cleanData <- x[setdiff(1:nrow(x),remIdx),]
   repIdx <- NULL
   repLab <- NULL
