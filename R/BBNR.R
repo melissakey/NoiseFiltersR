@@ -89,50 +89,69 @@ BBNR.default <- function(x,
     stop("class column of data must be a factor")
   }
  
+
   formu <- as.formula(paste(names(x)[classColumn],"~.",sep = ""))
+  n <- nrow(x)
+
   
-  knnInf <- sapply(1:nrow(x),function(i){
-    model <- kknn::kknn(formula = formu,
-      train = x[-i,],
-      test = x[i,],
-      k = k,
-      kernel = "rectangular")
-    isMisclassified <- model$fitted.values == x[i,classColumn]
-    nearestNeigh <- setdiff(1:nrow(x),i)[model$C]
-    c(isMisclassified,nearestNeigh)
+  #Instead of using LOOCV in which the model is fit nrow(x) times,
+  # We are going to run it once on all the data, and ignore the closet point (which will be the data point itself).
+  knn_result <- kknn::kknn(formula = formu,
+    train = x,
+    test = x,
+    k = k + 1,
+    kernel = 'rectangular')
+
+  # ignore the first data point -- it's always the point itself  
+  knnNeigh <- knn_result$C[,-1]
+  
+  # calculate the prediction by hand since the model prediction is no longer valid.
+  pred_set <- sapply( 1:nrow(x), function(.x) {
+    assigned_class <- x[.x,classColumn]
+    predicted_classes <- x[knnNeigh[.x, ], classColumn]
+    
+    predicted_classes == assigned_class
   })
   
-  isMisclassified <- as.logical(knnInf[1,])
-  knnNeigh <- knnInf[-1,]
-  
-  classifiesWellOther <- lapply(which(!isMisclassified),function(i){
-    knnNeigh[x[knnNeigh[,i],classColumn]==x[i,classColumn],i]
+  isMisclassified <- sapply( 1:n, function(.x) {
+    assigned_class <- x[.x,classColumn]
+    predicted_classes <- x[knnNeigh[.x, ], classColumn]
+    
+    sum(predicted_classes == assigned_class) <= k / 2
   })
-  coverageSets <- list()
-  length(coverageSets) <- nrow(x)
-  for(i in length(classifiesWellOther)){
-    items <- classifiesWellOther[[i]]
-    for(j in items){
-      coverageSets[[j]] <- c(coverageSets[[j]],i)
-    }
-  }
-  
-  misclassifyOther <- lapply(which(isMisclassified),function(i){
-    knnNeigh[x[knnNeigh[,i],classColumn]!=x[i,classColumn],i]
+  CoverageSets <- lapply(1:n, function(.x) {
+    nn_to <- which(.x == knnNeigh)
+    
+    CS <- nn_to[pred_set[nn_to]] %% n
+    CS <- CS[!isMisclassified[CS]]
+    if(!length(CS)) return(NULL)
+    
+    CS
   })
-  toExamine <- unlist(misclassifyOther)
-  counts <- table(toExamine)
-  toExamine <- as.integer(names(counts)[order(counts,decreasing = TRUE)])
+  LiabilitySets <- lapply(which(isMisclassified), function(.x) knnNeigh[.x, !pred_set[, .x]])
+  # DissimilaritySets <- lapply(1:n, function(.x) {
+  #   nn_to <- which(.x == knnNeigh)
+  #   DS <- nn_to[!pred_set[nn_to]] %% n
+  #   DS <- DS[isMisclassified[DS]]
+  #   if(!length(DS)) return(NULL)
+  #   
+  #   DS
+  # })
+  LS_counts <- table(unlist(LiabilitySets))
+  toExamine <- as.integer(names(sort(LS_counts, decreasing = TRUE)))
   
+  
+  
+  # this is BBNRv1
   #Examine in order
   toRemove <- sapply(toExamine, function(i) {
-    if(!is.null(coverageSets[[i]])) {
-      training <- x[setdiff(1:nrow(x), i), ]
+    if(!is.null(CoverageSets[[i]])) {
+      training <- x[-i, ]
       affectsRemoval <- kknn::kknn(formula = formu,
         train = training,
-        test = x[coverageSets[[i]],],
+        test = x[CoverageSets[[i]],],
         k = k,
-        kernel = "rectangular")$fitted.values != x[coverageSets[[i]],classColumn]
+        kernel = "rectangular")$fitted.values != x[CoverageSets[[i]],classColumn]
       if(all(!affectsRemoval)){
         return(TRUE)
       }
