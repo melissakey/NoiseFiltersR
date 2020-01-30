@@ -122,7 +122,7 @@ BBNR.default <- function(x,
   CoverageSets <- lapply(1:n, function(.x) {
     nn_to <- which(.x == knnNeigh)
     
-    CS <- nn_to[pred_set[nn_to]] %% n
+    CS <- (nn_to[pred_set[nn_to]] - 1) %% n + 1
     CS <- CS[!isMisclassified[CS]]
     if(!length(CS)) return(NULL)
     
@@ -144,46 +144,44 @@ BBNR.default <- function(x,
   
   # this is BBNRv1
   #Examine in order
-  toRemove <- sapply(toExamine, function(i) {
-    if(!is.null(CoverageSets[[i]])) {
-      training <- x[-i, ]
-      affectsRemoval <- kknn::kknn(formula = formu,
-        train = training,
-        test = x[CoverageSets[[i]],],
-        k = k,
-        kernel = "rectangular")$fitted.values != x[CoverageSets[[i]],classColumn]
-      if(all(!affectsRemoval)){
-        return(TRUE)
-      }
-      return(FALSE)
+  toRemove <- rep(FALSE, n)
+  trainIndices <- !toRemove
+
+  
+  for(i in toExamine){
+    if(!is.null(CoverageSets[[i]])){
+      trainIndices[i] <- FALSE
+      
+      knn2 <- kknn::kknn(formula = formu,
+        train = x[trainIndices,],
+        test = x[CoverageSets[[i]],, drop = FALSE],
+        k = k + 1,
+        kernel = "rectangular")$C #[,-1, drop = FALSE]
+      dim(knn2) <- c(length(knn2) / (k + 1), k + 1)
+      knn2 <- knn2[, -1, drop = FALSE]
+      
+      affectsRemoval <- sapply(1:length(CoverageSets[[i]]), function(.x) {
+        assigned_class <- x[CoverageSets[[i]][.x], classColumn]
+        
+        predicted_classes <- x[trainIndices,][knn2[.x, ],classColumn]
+        
+        predicted_classes == assigned_class
+      }) != x[CoverageSets[[i]], classColumn]
+
+      affectsRemoval <- colSums(affectsRemoval) <= k / 2
+      
+      if(any(affectsRemoval)) {
+        toRemove <- !trainIndices
+      } else trainIndices <- !toRemove
     }
     else{
-      return(TRUE)
+      toRemove[i] <- TRUE
     }
-  })
-  
-  # toRemove <- rep(NA,length(toExamine))
-  # for(j in 1:length(toExamine)){
-  #   i <- toExamine[j]
-  #   if(!is.null(coverageSets[[i]])){
-  #     training <- x[setdiff(1:nrow(x),c(toRemove,i)),]
-  #     affectsRemoval <- kknn::kknn(formula = formu,
-  #       train = training,
-  #       test = x[coverageSets[[i]],],
-  #       k = k,
-  #       kernel = "rectangular")$fitted.values != x[coverageSets[[i]],classColumn]
-  #     if(all(!affectsRemoval)){
-  #       toRemove[j] <- i
-  #     }
-  #   }
-  #   else{
-  #     toRemove[j] <- i
-  #   }
-  # }
+  }
   
   ##### Building the 'filter' object ###########
-  remIdx  <- toExamine[toRemove]
-  cleanData <- x[setdiff(1:nrow(x),remIdx),]
+  remIdx  <- which(toRemove)
+  cleanData <- x[!toRemove, ]
   repIdx <- NULL
   repLab <- NULL
   parameters <- list(k=k)
